@@ -9,6 +9,7 @@ def main(__):
     gs = tf.contrib.framework.get_or_create_global_step()
     model = BasicQuoraModel(gs,inputs,lengths,label)
     init = tf.global_variables_initializer()
+
     with MonitoredTrainingSession(
         checkpoint_dir=FLAGS.save_dir,
         save_summaries_steps=1,
@@ -22,7 +23,7 @@ def main(__):
         threads = tf.train.start_queue_runners(sess=sess,coord=coord)
         i = 0
         while True:
-            _, loss_val = sess.run([model.train_op, model.loss_op])
+            _, loss_val,_ = sess.run([model.train_op, model.loss_op,model.metrics_op])
             print(i, loss_val)
             i += 1
         coord.request_stop()
