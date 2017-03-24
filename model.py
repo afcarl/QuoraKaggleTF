@@ -17,6 +17,7 @@ class BasicQuoraModel():
         self.loss_op = BasicQuoraModel.loss(self.logits_op,self.label)
         self.train_op = BasicQuoraModel.optimizer(self.loss_op,self.gs)
         BasicQuoraModel.make_gradient_summaries(self.loss_op)
+
         self.metrics_op =BasicQuoraModel.metrics(logits=self.logits_op,labels=label)
         self.summaries = tf.summary.merge_all()
     @staticmethod
@@ -87,6 +88,7 @@ class BasicQuoraModel():
 
     @staticmethod
     def rnn_compare_sentances( l1, l2, s1_lstmed, s2_lstmed):
+        BasicQuoraModel.make_input_summaries(l1,l2)
         concat_lens = tf.stack([l1, l2], 1)
         dif_len = tf.reduce_max(concat_lens, 1)
         difs = tf.concat([s1_lstmed, s2_lstmed], 1)
@@ -98,14 +100,24 @@ class BasicQuoraModel():
         return difs_state
     @staticmethod
     def convolve_embedded_sentances(l1, l2, s1, s2,embedding_size,stride=2):
-        batch_size,seqeunce_length,_ = s1.shape
-        filters_1 = tf.get_variable(name="filters_1",shape=[stride*2,embedding_size,2*embedding_size])
-        filters_2 = tf.get_variable(name="filters_2", shape=[stride*2, 2*embedding_size, 4 * embedding_size])
-        s1_conv = tf.nn.conv1d(s1,filters_1,stride,"VALID")
-        s1_conv = tf.nn.conv1d(s1_conv, filters_2, stride, "VALID")
 
-        s2_conv = tf.nn.conv1d(s2, filters_1, stride, "VALID")
-        s2_conv = tf.nn.conv1d(s2_conv, filters_2, stride, "VALID")
+
+
+        with tf.variable_scope("conv_1") as scope:
+            filters_1 = tf.get_variable(name="filters_1", shape=[stride * 2, embedding_size, 2 * embedding_size])
+            s1_conv = tf.nn.conv1d(s1,filters_1,stride,"VALID")
+            s2_conv = tf.nn.conv1d(s2, filters_1, stride, "VALID")
+            s1_conv = tf.contrib.layers.fully_connected(s1_conv,num_outputs=2*embedding_size,scope=scope,activation_fn=tf.nn.relu)
+            scope.reuse_variables()
+            s2_conv = tf.contrib.layers.fully_connected(s2_conv, num_outputs=2*embedding_size, scope=scope,activation_fn=tf.nn.relu)
+        with tf.variable_scope("conv_2") as scope:
+            filters_2 = tf.get_variable(name="filters_2", shape=[stride * 2, 2 * embedding_size, 4 * embedding_size])
+            s1_conv = tf.nn.conv1d(s1_conv, filters_2, stride, "VALID")
+            s2_conv = tf.nn.conv1d(s2_conv, filters_2, stride, "VALID")
+            s1_conv = tf.contrib.layers.fully_connected(s1_conv,num_outputs=4*embedding_size,scope=scope,activation_fn=tf.nn.relu)
+            scope.reuse_variables()
+            s2_conv = tf.contrib.layers.fully_connected(s2_conv, num_outputs=4*embedding_size, scope=scope,activation_fn=tf.nn.relu)
+
 
         l1 = tf.clip_by_value(l1//(stride**2),1,s1_conv.shape[1])
         l2 = tf.clip_by_value(l2//(stride**2),1,s2_conv.shape[1])
