@@ -2,7 +2,6 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.contrib.layers.python.layers.initializers import xavier_initializer
 from arg_getter import FLAGS
-from tensorflow.contrib.rnn.python.ops.rnn_cell import LayerNormBasicLSTMCell
 
 
 
@@ -93,10 +92,10 @@ class BasicQuoraModel():
         dif_len = tf.reduce_max(concat_lens, 1)
         difs = tf.concat([s1_lstmed, s2_lstmed], 1)
         difs = tf.contrib.layers.fully_connected(difs, num_outputs=FLAGS.hidden2)
-        cell2 = tf.contrib.rnn.LayerNormBasicLSTMCell(num_units=FLAGS.hidden2)
+        cell2 = tf.contrib.rnn.GRUCell(num_units=FLAGS.hidden2)
         difs_output, difs_state = tf.nn.bidirectional_dynamic_rnn(cell_fw=cell2, cell_bw=cell2, inputs=difs,
                                                                   dtype=tf.float32, sequence_length=dif_len)
-        difs_state = tf.concat([difs_state[0].c, difs_state[0].c], 1)
+        difs_state = tf.concat([difs_state[0], difs_state[1]], 1)
         return difs_state
     @staticmethod
     def convolve_embedded_sentances(l1, l2, s1, s2,embedding_size,stride=2):
@@ -129,7 +128,7 @@ class BasicQuoraModel():
         with tf.variable_scope("inference", ) as scope:
             embedding_size, s1_embeded, s2_embeded = BasicQuoraModel.embed_sentances(s1, s2)
             l1,l2,s1_conv,s2_conv = BasicQuoraModel.convolve_embedded_sentances(l1,l2,s1_embeded,s2_embeded,embedding_size)
-            cell = tf.contrib.rnn.LayerNormBasicLSTMCell(num_units=FLAGS.hidden1)
+            cell = tf.contrib.rnn.GRUCell(num_units=FLAGS.hidden1)
             s1_lstmed = BasicQuoraModel.prepare_sentance(s1_conv, l1, cell=cell,)
             scope.reuse_variables()
             s2_lstmed = BasicQuoraModel.prepare_sentance(s2_conv, l2,  cell=cell,)
