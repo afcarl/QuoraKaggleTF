@@ -152,7 +152,7 @@ class BasicQuoraModel():
 
     @staticmethod
     def optimizer(loss,gs):
-        opt = tf.train.AdamOptimizer(0.002,)
+        opt = tf.train.AdamOptimizer(FLAGS.learning_rate,)
         return opt.minimize(loss,global_step=gs)
 
 

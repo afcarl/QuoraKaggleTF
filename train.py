@@ -2,12 +2,13 @@ import tensorflow as tf
 from arg_getter import FLAGS
 from tensorflow.contrib.learn.python.learn.basic_session_run_hooks import NanTensorHook
 from tensorflow.python.training.monitored_session import MonitoredTrainingSession
+
+from bytenet.bytenet_quora import BytenetQuora
 from input_loader import prepareInputsBatch
-from model import BasicQuoraModel
 def main(__):
     label, inputs, lengths = prepareInputsBatch(FLAGS.batch_size)
     gs = tf.contrib.framework.get_or_create_global_step()
-    model = BasicQuoraModel(gs,inputs,lengths,label)
+    model = BytenetQuora(inputs[0],inputs[1],label,gs)
     init = tf.global_variables_initializer()
 
     with MonitoredTrainingSession(
