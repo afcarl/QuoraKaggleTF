@@ -71,14 +71,17 @@ class BytenetQuora():
         inputs = [next_input]
         height=1
         i =0
-        dilation_rate =2
-        for i in range(6):
+        for i in range(5): #5 dilation si receptive field of 2^7 = 128
             with tf.variable_scope("dilated_{}".format(i)):
-                filter_ = tf.get_variable(name="conv_filter_{}".format(i), shape=[2, width, size, size])
+                if i== 0:
+                    height =2
+                else:
+                    height =1
+                dilation_rate=2**i
+                filter_ = tf.get_variable(name="conv_filter_{}".format(i), shape=[height, width, size, size])
                 res = atrous_conv2d(next_input, filters=filter_, rate=dilation_rate, padding="SAME")
                 inputs.append(res)
                 next_input = ln(tf.nn.relu(sum(inputs)))
                 tf.nn.dropout(next_input,FLAGS.dropout_keep_prob)
                 tf.summary.histogram(name="activation", values=next_input)
-                i+=1
         return next_input
