@@ -1,6 +1,6 @@
 import tensorflow as tf
 import pickle
-with open('/home/tal/dev/recover/data/vocab.pkl','rb') as f:
+with open('./data/vocab.pkl','rb') as f:
     voc = pickle.load(f)
     vocab_size = len(voc["vocab"])
 
