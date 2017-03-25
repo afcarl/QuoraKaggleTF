@@ -30,23 +30,24 @@ class BytenetQuora():
             s2_emb = tf.nn.embedding_lookup(w_source_embedding, s2)
 
             height =2
-            width =8
+            width =2
             i =1
             size = s1_emb.shape[2]
             batch,sequence,hidden = s1_emb.get_shape()
             combined = tf.stack([s1_emb, s2_emb], 1)  # [batch_size,2,seq_len,hidden]
             next_input = combined
+            inputs = [next_input]
             for i in range(5):
-                j =i
-                next_input = ln(tf.nn.sigmoid(next_input, name='enc_sigmoid0_layer{}'.format(i)))
-                filter_ = tf.get_variable(name="conv_filter_{}".format(i), shape=[height, width, size, size])
-                conv1 = tf.nn.conv2d(next_input, filter=filter_, strides=[1,1,1,1], padding="SAME")
-                sigmoid2 = ln(tf.nn.sigmoid(conv1, name='enc_sigmoid2_layer{}'.format(i)))
-                res =atrous_conv2d(sigmoid2,filters=filter_,rate=2**j,padding="SAME")
-                res  = ln(tf.nn.sigmoid(res, name='enc_sigmoid2_layer{}'.format(i)))
-                next_input = res+next_input
+                with tf.variable_scope("dilated_{}".format(i)):
+                    j =i
+                    filter_ = tf.get_variable(name="conv_filter_{}".format(i), shape=[height, width, size, size])
+                    res =atrous_conv2d(next_input,filters=filter_,rate=2,padding="SAME")
+                    inputs.append(res)
+                    next_input = ln(tf.nn.sigmoid(sum(inputs)))
+                    tf.summary.histogram(name="activation",values=next_input)
             i =0
-            next_input =ln(tf.nn.sigmoid(next_input, name='final_atrous_signmoid'))
+            width = 8
+
             while next_input.shape[2] >width:
 
                 filter_ = tf.get_variable(name="conv_shrink_filter_{}".format(i), shape=[1, width, size, size])
