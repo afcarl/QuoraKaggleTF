@@ -35,7 +35,7 @@ class BytenetQuora():
         batch,sequence,hidden = s1_emb.get_shape()
         combined = tf.stack([s1_emb, s2_emb], 1)  # [batch_size,2,seq_len,hidden]
         next_input = combined
-        for i in range(3):
+        for i in range(5):
             j =i
             filter_ = tf.get_variable(name="conv_filter_{}".format(i), shape=[height, width, size, size])
             conv1 = tf.nn.conv2d(next_input, filter=filter_, strides=[1,1,1,1], padding="SAME")
@@ -44,6 +44,7 @@ class BytenetQuora():
             res  = ln(tf.nn.sigmoid(res, name='enc_sigmoid2_layer{}'.format(i)))
             next_input = res+next_input
         i =0
+        next_input =ln(tf.nn.sigmoid(next_input, name='final_atrous_signmoid'))
         while next_input.shape[2] >width:
 
             filter_ = tf.get_variable(name="conv_shrink_filter_{}".format(i), shape=[1, width, size, size])
