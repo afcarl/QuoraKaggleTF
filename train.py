@@ -10,6 +10,19 @@ def main(__):
     gs = tf.contrib.framework.get_or_create_global_step()
     model = BytenetQuora(inputs[0],inputs[1],label,gs)
     init = tf.global_variables_initializer()
+    total_parameters = 0
+    for variable in tf.trainable_variables():
+        # shape is an array of tf.Dimension
+        shape = variable.get_shape()
+        print(shape)
+        print(len(shape))
+        variable_parametes = 1
+        for dim in shape:
+            print(dim)
+            variable_parametes *= dim.value
+        print(variable_parametes)
+        total_parameters += variable_parametes
+    print(total_parameters)
 
     with MonitoredTrainingSession(
         checkpoint_dir=FLAGS.save_dir,

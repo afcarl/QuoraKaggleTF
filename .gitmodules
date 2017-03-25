@@ -1,0 +1,3 @@
+[submodule "byteNet-tensorflow"]
+	path = byteNet-tensorflow
+	url = https://github.com/talolard/byteNet-tensorflow.git
