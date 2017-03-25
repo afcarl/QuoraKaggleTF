@@ -72,6 +72,7 @@ class BytenetQuora():
                 res = atrous_conv2d(next_input, filters=filter_, rate=dilation_rate, padding="VALID")
                 inputs.append(res)
                 next_input = ln(tf.nn.relu(res))
+                tf.nn.dropout(next_input,FLAGS.dropout_keep_prob)
                 tf.summary.histogram(name="activation", values=next_input)
                 i+=1
         last_layer_shape = 50
