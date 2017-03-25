@@ -1,23 +1,62 @@
 import tensorflow as tf
 from tensorflow.contrib.layers.python.layers.initializers import xavier_initializer
+from tensorflow.python.ops.nn_ops import atrous_conv2d
 
 from bytenet import ops
 from bytenet.model_config import translator_config as config
 from arg_getter import FLAGS
 from model import BasicQuoraModel
-
 ln = tf.contrib.layers.layer_norm
 class BytenetQuora():
     def __init__(self,s1,s2,labels,gs):
         self.options = get_model_options()
-        s1_enc,s2_enc = self.encode_sentances(s1,s2)
-        self.logits_op = self.get_logits(s1_enc,s2_enc)
+        self.logits_op= self.quick_encode(s1, s2)
+        # s1_enc,s2_enc = self.encode_sentances(s1,s2)
+        #
+        # self.logits_op = self.get_logits(s1_enc,s2_enc)
         self.loss_op = BasicQuoraModel.loss(self.logits_op,labels)
         self.train_op = BasicQuoraModel.optimizer(self.loss_op,gs)
         BasicQuoraModel.make_gradient_summaries(self.loss_op)
         self.metrics_op =BasicQuoraModel.metrics(logits=self.logits_op,labels=labels)
         self.summaries = tf.summary.merge_all()
+
+    def quick_encode(self,s1,s2):
+        w_source_embedding = tf.get_variable('z_source_embedding',
+                                             [FLAGS.vocab_size, FLAGS.hidden1],
+                                             initializer=tf.truncated_normal_initializer(stddev=0.02))
+        s1_emb = tf.nn.embedding_lookup(w_source_embedding, s1)
+        s2_emb = tf.nn.embedding_lookup(w_source_embedding, s2)
+
+        height =2
+        width =8
+        i =1
+        size = s1_emb.shape[2]
+        batch,sequence,hidden = s1_emb.get_shape()
+        combined = tf.stack([s1_emb, s2_emb], 1)  # [batch_size,2,seq_len,hidden]
+        next_input = combined
+        for i in range(3):
+            j =i
+            filter_ = tf.get_variable(name="conv_filter_{}".format(i), shape=[height, width, size, size])
+            conv1 = tf.nn.conv2d(next_input, filter=filter_, strides=[1,1,1,1], padding="SAME")
+            relu2 = ln(tf.nn.relu(conv1, name='enc_relu2_layer{}'.format(i)))
+            res =atrous_conv2d(relu2,filters=filter_,rate=2**j,padding="SAME")
+            res  = ln(tf.nn.relu(res, name='enc_relu2_layer{}'.format(i)))
+            next_input = res+next_input
+        i =0
+        while res.shape[2] >width:
+
+            filter_ = tf.get_variable(name="conv_shrink_filter_{}".format(i), shape=[1, width, size, size])
+            conv1 = tf.nn.conv2d(res, filter=filter_, strides=[1, 1, 1, 1], padding="VALID")
+            relud = tf.nn.relu(conv1, name="relu_{}".format(i))
+            res = tf.nn.max_pool(relud, ksize=[1, height, width, 1], strides=[1, height, width, 1], padding="SAME")
+            i+=1
+        res = tf.squeeze(res)
+        res = tf.reshape(res,[FLAGS.batch_size,-1])
+        logits = tf.nn.relu(res)
+        logits = tf.contrib.layers.linear(logits, num_outputs=2)
+        return logits
     def encode_sentances(self,s1,s2):
+
         with tf.variable_scope("model", initializer=xavier_initializer()):
             w_source_embedding = tf.get_variable('w_source_embedding',
                                                  [self.options['n_source_quant'], 2 * self.options['residual_channels']],
@@ -34,14 +73,16 @@ class BytenetQuora():
             combined = tf.stack([s1,s2],1) #[batch_size,2,seq_len,hidden]
             next_input = combined
             size = combined.shape[3]
-            strides =[1,1,2,1]
+            strides =[1,1,1,1]
             i=0
-            while next_input.shape[2] >1:
+            width = 4
+            while next_input.shape[2] > width :
                 with tf.variable_scope("squeeze_layer_{}".format(i)):
                     height = 2 if i==0 else 1
-                    filter_ =tf.get_variable(name="conv_filter_{}".format(i), shape=[height,2,size,size])
+                    filter_ =tf.get_variable(name="conv_filter_{}".format(i), shape=[height,width,size,size])
                     conv = tf.nn.conv2d(input=next_input,filter=filter_,strides=strides,name="conv_op_{}".format(i),padding="VALID")
                     relud = tf.nn.relu(conv,name="relu_{}".format(i))
+                    relud = tf.nn.max_pool(relud,ksize=[1,height,width,1],strides=[1,height,width,1],padding="SAME")
                     relud = tf.contrib.layers.layer_norm(relud)
                     next_input = relud
                     i+=1
