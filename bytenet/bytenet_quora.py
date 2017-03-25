@@ -27,8 +27,9 @@ class BytenetQuora():
             width =2
             size = s1_emb.shape[2]
             next_input = combined
-            logits = self.build_dilations(height, next_input, size, width)
-            logits = tf.contrib.layers.linear(logits, num_outputs=2)
+            next_input = self.build_dilations(height, next_input, size, width)
+            next_input = self.convolve_reduce(height,next_input,size)
+            logits = self.reduceded_vons_to_logits(next_input)
         return logits
 
     def emebdd_and_stack_inputs(self, s1, s2):
@@ -50,34 +51,34 @@ class BytenetQuora():
 
     def convolve_reduce(self, height, next_input, size):
         i = 0
-        width = 8
+        width = 5
         while next_input.shape[2] > width:
-            filter_ = tf.get_variable(name="conv_shrink_filter_{}".format(i), shape=[1, width, size, size])
-            conv1 = tf.nn.conv2d(next_input, filter=filter_, strides=[1, 1, 1, 1], padding="VALID")
+            if i > 0:
+                height =1
+            filter_ = tf.get_variable(name="conv_shrink_filter_{}".format(i), shape=[height, width, size, size])
+            conv1 = tf.nn.conv2d(next_input, filter=filter_, strides=[1, 1, width, 1], padding="VALID")
+
             sigmoidd = ln(tf.nn.sigmoid(conv1, name="sigmoid_{}".format(i)))
-            next_input = tf.nn.max_pool(sigmoidd, ksize=[1, height, width, 1], strides=[1, height, width, 1],
+
+            next_input = tf.nn.max_pool(sigmoidd, ksize=[1, height, 2, 1], strides=[1, height, width, 1],
                                         padding="SAME")
+
             i += 1
+        next_input = tf.squeeze(next_input)
         return next_input
 
     def build_dilations(self, height, next_input, size, width):
         inputs = [next_input]
         height=1
         i =0
-        while next_input.get_shape()[2] >1:
+        dilation_rate =2
+        for i in range(6):
             with tf.variable_scope("dilated_{}".format(i)):
-                filter_ = tf.get_variable(name="conv_filter_{}".format(i), shape=[1, width, size, size])
-                dilation_rate = max(2*i,1)
-                dilation_rate = min(dilation_rate,next_input.get_shape().as_list()[2]-1)
-                res = atrous_conv2d(next_input, filters=filter_, rate=dilation_rate, padding="VALID")
+                filter_ = tf.get_variable(name="conv_filter_{}".format(i), shape=[2, width, size, size])
+                res = atrous_conv2d(next_input, filters=filter_, rate=dilation_rate, padding="SAME")
                 inputs.append(res)
-                next_input = ln(tf.nn.relu(res))
+                next_input = ln(tf.nn.relu(sum(inputs)))
                 tf.nn.dropout(next_input,FLAGS.dropout_keep_prob)
                 tf.summary.histogram(name="activation", values=next_input)
                 i+=1
-        last_layer_shape = 50
-        with tf.variable_scope("connect_dilations"):
-            logits = tf.reshape(next_input,[FLAGS.batch_size,-1])
-            logits = tf.contrib.layers.fully_connected(logits, num_outputs=last_layer_shape)
-
-        return logits
+        return next_input
