@@ -22,41 +22,43 @@ class BytenetQuora():
         
 
     def quick_encode(self,s1,s2):
-        w_source_embedding = tf.get_variable('z_source_embedding',
-                                             [FLAGS.vocab_size, FLAGS.hidden1],
-                                             initializer=tf.truncated_normal_initializer(stddev=0.02))
-        s1_emb = tf.nn.embedding_lookup(w_source_embedding, s1)
-        s2_emb = tf.nn.embedding_lookup(w_source_embedding, s2)
+        with tf.variable_scope("model", initializer=xavier_initializer()):
+            w_source_embedding = tf.get_variable('z_source_embedding',
+                                                 [FLAGS.vocab_size, FLAGS.hidden1],
+                                                 initializer=tf.truncated_normal_initializer(stddev=0.02))
+            s1_emb = tf.nn.embedding_lookup(w_source_embedding, s1)
+            s2_emb = tf.nn.embedding_lookup(w_source_embedding, s2)
 
-        height =2
-        width =8
-        i =1
-        size = s1_emb.shape[2]
-        batch,sequence,hidden = s1_emb.get_shape()
-        combined = tf.stack([s1_emb, s2_emb], 1)  # [batch_size,2,seq_len,hidden]
-        next_input = combined
-        for i in range(5):
-            j =i
-            filter_ = tf.get_variable(name="conv_filter_{}".format(i), shape=[height, width, size, size])
-            conv1 = tf.nn.conv2d(next_input, filter=filter_, strides=[1,1,1,1], padding="SAME")
-            sigmoid2 = ln(tf.nn.sigmoid(conv1, name='enc_sigmoid2_layer{}'.format(i)))
-            res =atrous_conv2d(sigmoid2,filters=filter_,rate=2**j,padding="SAME")
-            res  = ln(tf.nn.sigmoid(res, name='enc_sigmoid2_layer{}'.format(i)))
-            next_input = res+next_input
-        i =0
-        next_input =ln(tf.nn.sigmoid(next_input, name='final_atrous_signmoid'))
-        while next_input.shape[2] >width:
+            height =2
+            width =8
+            i =1
+            size = s1_emb.shape[2]
+            batch,sequence,hidden = s1_emb.get_shape()
+            combined = tf.stack([s1_emb, s2_emb], 1)  # [batch_size,2,seq_len,hidden]
+            next_input = combined
+            for i in range(5):
+                j =i
+                next_input = ln(tf.nn.sigmoid(next_input, name='enc_sigmoid0_layer{}'.format(i)))
+                filter_ = tf.get_variable(name="conv_filter_{}".format(i), shape=[height, width, size, size])
+                conv1 = tf.nn.conv2d(next_input, filter=filter_, strides=[1,1,1,1], padding="SAME")
+                sigmoid2 = ln(tf.nn.sigmoid(conv1, name='enc_sigmoid2_layer{}'.format(i)))
+                res =atrous_conv2d(sigmoid2,filters=filter_,rate=2**j,padding="SAME")
+                res  = ln(tf.nn.sigmoid(res, name='enc_sigmoid2_layer{}'.format(i)))
+                next_input = res+next_input
+            i =0
+            next_input =ln(tf.nn.sigmoid(next_input, name='final_atrous_signmoid'))
+            while next_input.shape[2] >width:
 
-            filter_ = tf.get_variable(name="conv_shrink_filter_{}".format(i), shape=[1, width, size, size])
-            conv1 = tf.nn.conv2d(next_input, filter=filter_, strides=[1, 1, 1, 1], padding="VALID")
-            sigmoidd = ln(tf.nn.sigmoid(conv1, name="sigmoid_{}".format(i)))
-            next_input = tf.nn.max_pool(sigmoidd, ksize=[1, height, width, 1], strides=[1, height, width, 1], padding="SAME")
-            i+=1
-        final = next_input
-        final = tf.squeeze(final)
-        final = tf.reshape(final,[FLAGS.batch_size,-1])
-        logits = ln(tf.nn.sigmoid(final))
-        logits = tf.contrib.layers.linear(logits, num_outputs=2)
+                filter_ = tf.get_variable(name="conv_shrink_filter_{}".format(i), shape=[1, width, size, size])
+                conv1 = tf.nn.conv2d(next_input, filter=filter_, strides=[1, 1, 1, 1], padding="VALID")
+                sigmoidd = ln(tf.nn.sigmoid(conv1, name="sigmoid_{}".format(i)))
+                next_input = tf.nn.max_pool(sigmoidd, ksize=[1, height, width, 1], strides=[1, height, width, 1], padding="SAME")
+                i+=1
+            final = next_input
+            final = tf.squeeze(final)
+            final = tf.reshape(final,[FLAGS.batch_size,-1])
+            logits = ln(tf.nn.sigmoid(final))
+            logits = tf.contrib.layers.linear(logits, num_outputs=2)
         return logits
     def encode_sentances(self,s1,s2):
 
