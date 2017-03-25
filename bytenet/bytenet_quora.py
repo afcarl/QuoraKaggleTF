@@ -19,6 +19,7 @@ class BytenetQuora():
         BasicQuoraModel.make_gradient_summaries(self.loss_op)
         self.metrics_op =BasicQuoraModel.metrics(logits=self.logits_op,labels=labels)
         self.summaries = tf.summary.merge_all()
+        
 
     def quick_encode(self,s1,s2):
         w_source_embedding = tf.get_variable('z_source_embedding',
@@ -38,21 +39,22 @@ class BytenetQuora():
             j =i
             filter_ = tf.get_variable(name="conv_filter_{}".format(i), shape=[height, width, size, size])
             conv1 = tf.nn.conv2d(next_input, filter=filter_, strides=[1,1,1,1], padding="SAME")
-            relu2 = ln(tf.nn.relu(conv1, name='enc_relu2_layer{}'.format(i)))
-            res =atrous_conv2d(relu2,filters=filter_,rate=2**j,padding="SAME")
-            res  = ln(tf.nn.relu(res, name='enc_relu2_layer{}'.format(i)))
+            sigmoid2 = ln(tf.nn.sigmoid(conv1, name='enc_sigmoid2_layer{}'.format(i)))
+            res =atrous_conv2d(sigmoid2,filters=filter_,rate=2**j,padding="SAME")
+            res  = ln(tf.nn.sigmoid(res, name='enc_sigmoid2_layer{}'.format(i)))
             next_input = res+next_input
         i =0
-        while res.shape[2] >width:
+        while next_input.shape[2] >width:
 
             filter_ = tf.get_variable(name="conv_shrink_filter_{}".format(i), shape=[1, width, size, size])
-            conv1 = tf.nn.conv2d(res, filter=filter_, strides=[1, 1, 1, 1], padding="VALID")
-            relud = tf.nn.relu(conv1, name="relu_{}".format(i))
-            res = tf.nn.max_pool(relud, ksize=[1, height, width, 1], strides=[1, height, width, 1], padding="SAME")
+            conv1 = tf.nn.conv2d(next_input, filter=filter_, strides=[1, 1, 1, 1], padding="VALID")
+            sigmoidd = ln(tf.nn.sigmoid(conv1, name="sigmoid_{}".format(i)))
+            next_input = tf.nn.max_pool(sigmoidd, ksize=[1, height, width, 1], strides=[1, height, width, 1], padding="SAME")
             i+=1
-        res = tf.squeeze(res)
-        res = tf.reshape(res,[FLAGS.batch_size,-1])
-        logits = tf.nn.relu(res)
+        final = next_input
+        final = tf.squeeze(final)
+        final = tf.reshape(final,[FLAGS.batch_size,-1])
+        logits = ln(tf.nn.sigmoid(final))
         logits = tf.contrib.layers.linear(logits, num_outputs=2)
         return logits
     def encode_sentances(self,s1,s2):
@@ -81,10 +83,10 @@ class BytenetQuora():
                     height = 2 if i==0 else 1
                     filter_ =tf.get_variable(name="conv_filter_{}".format(i), shape=[height,width,size,size])
                     conv = tf.nn.conv2d(input=next_input,filter=filter_,strides=strides,name="conv_op_{}".format(i),padding="VALID")
-                    relud = tf.nn.relu(conv,name="relu_{}".format(i))
-                    relud = tf.nn.max_pool(relud,ksize=[1,height,width,1],strides=[1,height,width,1],padding="SAME")
-                    relud = tf.contrib.layers.layer_norm(relud)
-                    next_input = relud
+                    sigmoidd = tf.nn.sigmoid(conv,name="sigmoid_{}".format(i))
+                    sigmoidd = tf.nn.max_pool(sigmoidd,ksize=[1,height,width,1],strides=[1,height,width,1],padding="SAME")
+                    sigmoidd = tf.contrib.layers.layer_norm(sigmoidd)
+                    next_input = sigmoidd
                     i+=1
             logits = tf.squeeze(next_input)
             logits =tf.contrib.layers.linear(logits,num_outputs=2)
@@ -98,18 +100,18 @@ class BytenetQuora():
     def encode_layer(self,input_, dilation, layer_no, last_layer=False):
         with tf.variable_scope("enc_layer_{}".format(layer_no)):
             options = get_model_options()
-            relu1 = ln(tf.nn.relu(input_, name='enc_relu1_layer{}'.format(layer_no)))
-            conv1 = ops.conv1d(relu1, options['residual_channels'], name='enc_conv1d_1_layer{}'.format(layer_no))
+            sigmoid1 = ln(tf.nn.sigmoid(input_, name='enc_sigmoid1_layer{}'.format(layer_no)))
+            conv1 = ops.conv1d(sigmoid1, options['residual_channels'], name='enc_conv1d_1_layer{}'.format(layer_no))
             #conv1 = tf.matmul(conv1, self.source_masked_d)
-            relu2 = ln(tf.nn.relu(conv1, name='enc_relu2_layer{}'.format(layer_no)))
-            dilated_conv = ops.dilated_conv1d(relu2, options['residual_channels'],
+            sigmoid2 = ln(tf.nn.sigmoid(conv1, name='enc_sigmoid2_layer{}'.format(layer_no)))
+            dilated_conv = ops.dilated_conv1d(sigmoid2, options['residual_channels'],
                                               dilation, options['encoder_filter_width'],
                                               causal=False,
                                               name="enc_dilated_conv_layer{}".format(layer_no)
                                               )
             #dilated_conv = tf.matmul(dilated_conv, self.source_masked_d)
-            relu3 = ln(tf.nn.relu(dilated_conv, name='enc_relu3_layer{}'.format(layer_no)))
-            conv2 = ops.conv1d(relu3, 2 * options['residual_channels'], name='enc_conv1d_2_layer{}'.format(layer_no))
+            sigmoid3 = ln(tf.nn.sigmoid(dilated_conv, name='enc_sigmoid3_layer{}'.format(layer_no)))
+            conv2 = ops.conv1d(sigmoid3, 2 * options['residual_channels'], name='enc_conv1d_2_layer{}'.format(layer_no))
             return input_ + conv2
     def encoder(self, input_):
         options = get_model_options()
@@ -123,7 +125,7 @@ class BytenetQuora():
             curr_input = layer_output
 
         # TO BE CONCATENATED WITH TARGET EMBEDDING
-        processed_output = tf.nn.relu(ops.conv1d(tf.nn.relu(layer_output),
+        processed_output = tf.nn.sigmoid(ops.conv1d(tf.nn.sigmoid(layer_output),
                                                  options['residual_channels'],
                                                  name='encoder_post_processing'))
         return processed_output
