@@ -69,7 +69,7 @@ class BasicQuoraModel():
             grads = tf.gradients(loss, tf.trainable_variables())
             grads = list(zip(grads, tf.trainable_variables()))
             for grad, var in grads:
-                if not "LayerNorm" in var.name:
+                if not "LayerNorm" in var.name and not "layer_weight" in var.name:
                     tf.summary.histogram(var.name + '/gradient', grad)
 
     @staticmethod

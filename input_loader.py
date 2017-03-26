@@ -1,8 +1,8 @@
 import tensorflow as tf
 from arg_getter import FLAGS
 
-def prepareInputs():
-
+def prepareInputs(mode="train"):
+    data_path = './data/*.csv' if mode=="train" else './test_data/*.csv'
     max_len = 150
     reader = tf.TextLineReader()
     filename_queue = tf.train.string_input_producer(tf.train.match_filenames_once("./data/*.csv"),num_epochs=FLAGS.num_epochs)
@@ -17,11 +17,11 @@ def prepareInputs():
     q2 = tf.stack(remaining[max_len:])
     return label, q1,q2, length_1,length_2
 
-def prepareInputsBatch(batch_size=100):
+def prepareInputsBatch(batch_size=100,mode="train"):
     min_after_dequeue = 10000
     capacity = min_after_dequeue + 3 * batch_size
     label, q1, q2, l1, l2= tf.train.shuffle_batch(
-        prepareInputs(), batch_size=batch_size, capacity=capacity,
+        prepareInputs(mode), batch_size=batch_size, capacity=capacity,
         min_after_dequeue=min_after_dequeue)
     return label, [q1, q2], [l1, l2]
 

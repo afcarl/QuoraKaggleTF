@@ -8,7 +8,7 @@ from input_loader import prepareInputsBatch
 def main(__):
     label, inputs, lengths = prepareInputsBatch(FLAGS.batch_size)
     gs = tf.contrib.framework.get_or_create_global_step()
-    model = BytenetQuora(inputs[0],inputs[1],label,gs)
+    model = BytenetQuora(inputs[0],inputs[1],lengths[0],lengths[1],label,gs)
     init = tf.global_variables_initializer()
     total_parameters = 0
     for variable in tf.trainable_variables():
