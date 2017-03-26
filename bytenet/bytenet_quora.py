@@ -93,8 +93,9 @@ class BytenetQuora():
         inputs = [next_input]
 
         i =0
-        while 2**i < FLAGS.max_len: #9 dilation si receptive field of 2^10 = 1024
-            dilation_rate = 2 ** i
+        dilation_rate = 2 ** i
+        while dilation_rate <= FLAGS.max_len: #9 dilation si receptive field of 2^10 = 1024
+
             with tf.variable_scope("dilated_{}".format(i)):
                 if dilation_rate <=2:
                     height =2
@@ -112,4 +113,5 @@ class BytenetQuora():
                 tf.nn.dropout(next_input,FLAGS.dropout_keep_prob)
                 tf.summary.histogram(name="activation", values=next_input)
                 i+=1
+                dilation_rate = 2 ** i
         return next_input
