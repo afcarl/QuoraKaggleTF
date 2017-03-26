@@ -153,7 +153,10 @@ class BasicQuoraModel():
 
     @staticmethod
     def optimizer(loss,gs):
-        opt = tf.train.AdamOptimizer(FLAGS.learning_rate,)
+        num_batches = 400000/FLAGS.batch_size
+        decay_steps = num_batches//7
+        lr = tf.train.exponential_decay(learning_rate=FLAGS.learning_rate,global_step=gs,decay_rate=0.9,decay_steps=decay_steps)
+        opt = tf.train.AdamOptimizer(lr,)
         return opt.minimize(loss,global_step=gs)
 
 
