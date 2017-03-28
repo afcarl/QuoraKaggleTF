@@ -8,16 +8,23 @@ from arg_getter import FLAGS
 from model import BasicQuoraModel
 ln = tf.contrib.layers.layer_norm
 class BytenetQuora():
-    def __init__(self,s1,s2,l1,l2,labels,gs):
-        mask,mask1,mask2 = self.build_mask_per_batch(l1,l2)
+    def __init__(self,gs):
+        self.s1 = tf.placeholder(shape=[None,None],dtype=tf.int32,name="s1_pl")
+        self.s2 = tf.placeholder(shape=[None, None], dtype=tf.int32,name="s2_pl")
+        self.l1 = tf.placeholder(shape=[None], dtype=tf.int32,name="l1_pl")
+        self.l2 = tf.placeholder(shape=[None], dtype=tf.int32,name="l2_pl")
+        self.labels = tf.placeholder(shape=[None], dtype=tf.int32,name="labels_pl")
+        concat_lens = tf.stack([self.l1, self.l2], 1)
+        greater_len = tf.reduce_max(concat_lens, 1)
+        max_len = tf.reduce_max(greater_len)
+        s1 = tf.slice(self.s1,[0,0],[FLAGS.batch_size,max_len])
+        s2 = tf.slice(self.s2, [0,0],[FLAGS.batch_size,max_len])
+        mask,mask1,mask2 = self.build_mask_per_batch(self.l1,self.l2)
         self.logits_op= self.quick_encode(s1, s2,mask,mask1,mask2)
-        # s1_enc,s2_enc = self.encode_sentances(s1,s2)
-        #
-        # self.logits_op = self.get_logits(s1_enc,s2_enc)
-        self.loss_op = BasicQuoraModel.loss(self.logits_op,labels)
+        self.loss_op = BasicQuoraModel.loss(self.logits_op,self.labels)
         self.train_op = BasicQuoraModel.optimizer(self.loss_op,gs)
         BasicQuoraModel.make_gradient_summaries(self.loss_op)
-        self.metrics_op =BasicQuoraModel.metrics(logits=self.logits_op,labels=labels)
+        self.metrics_op =BasicQuoraModel.metrics(logits=self.logits_op,labels=self.labels)
         self.summaries = tf.summary.merge_all()
 
     @staticmethod
@@ -34,9 +41,10 @@ class BytenetQuora():
         '''
         concat_lens = tf.stack([l1, l2], 1)
         greater_len= tf.reduce_max(concat_lens, 1)
-        mask1 = tf.expand_dims(tf.sequence_mask(l1, FLAGS.max_len, dtype=tf.float32),axis=2)
-        mask2 = tf.expand_dims(tf.sequence_mask(l2, FLAGS.max_len, dtype=tf.float32),axis=2)
-        big_mask = tf.sequence_mask(greater_len, FLAGS.max_len, dtype=tf.float32,)
+        max_len = tf.reduce_max(greater_len)
+        mask1 = tf.expand_dims(tf.sequence_mask(l1,maxlen=max_len,  dtype=tf.float32),axis=2)
+        mask2 = tf.expand_dims(tf.sequence_mask(l2,maxlen=max_len, dtype=tf.float32),axis=2)
+        big_mask = tf.sequence_mask(greater_len, dtype=tf.float32,)
         mask = tf.expand_dims(tf.stack([big_mask, big_mask], axis=1), axis=3)
         return mask,mask1,mask2
     def quick_encode(self,s1,s2,mask,mask1,mask2):
@@ -49,7 +57,7 @@ class BytenetQuora():
             next_input = combined
             next_input = self.build_dilations(height, next_input, size, width,mask)
             next_input = self.convolve_reduce(height,next_input,size)
-            logits = self.reduceded_vons_to_logits(next_input)
+            logits = self.to_logits(next_input)
         return logits
 
     def emebdd_and_stack_inputs(self, s1, s2,mask1,mask2):
@@ -63,38 +71,42 @@ class BytenetQuora():
         combined = tf.stack([s1_emb, s2_emb], 1)  # [batch_size,2,seq_len,hidden]
         return combined, s1_emb
 
-    def reduceded_vons_to_logits(self, next_input):
-        final = next_input
-        final = tf.squeeze(final)
-        final = tf.reshape(final, [FLAGS.batch_size, -1])
-        logits = ln(tf.nn.sigmoid(final))
-        logits = tf.contrib.layers.linear(logits, num_outputs=2)
+    def to_logits(self, next_input):
+        logits = tf.contrib.layers.linear(next_input, num_outputs=2)
         return logits
 
     def convolve_reduce(self, height, next_input, size):
         i = 0
         width = 5
-        while next_input.shape[2] > width:
-            if i > 0:
-                height =1
-            filter_ = tf.get_variable(name="conv_shrink_filter_{}".format(i), shape=[height, width, size, size])
-            conv1 = tf.nn.conv2d(next_input, filter=filter_, strides=[1, 1, width, 1], padding="VALID")
+        #TODO need to take means only up to last length
+        batch_size,_,sequence_length,hidden_size = tf.unstack(tf.shape(next_input))
+        next_input = tf.reshape(next_input,shape=[batch_size,FLAGS.hidden2,-1])
+        means = tf.reduce_mean(next_input,axis=2) #mean is [batch_size,2,size]
+        next_input = ln(tf.nn.relu(means))
+        # i =0
+        # next_input = tf.expand_dims(means,axis=1)
+        # next_input = tf.expand_dims(next_input, axis=1)
+        # activations =[]
+        # while next_input.shape.as_list()[2] >1:
+        #
+        #     with tf.name_scope("reduce_conv_{}".format(i)):
+        #         filters =tf.get_variable(name="reduce_filter_{}".format(i),shape=[1,FLAGS.hidden2//10,FLAGS.hidden2,FLAGS.hidden2,])
+        #         next_input = tf.nn.conv2d(next_input,filter=filters,strides=[1,1,1,1],padding="VALID")
+        #         next_input =ln(tf.nn.relu(next_input))
+        #         activations.append(next_input)
+        #
+        #     i+=1
+        # for num,activ in enumerate(activations):
+        #     tf.summary.histogram("reduce_conv_{}".format(num),activ)
 
-            sigmoidd = ln(tf.nn.sigmoid(conv1, name="sigmoid_{}".format(i)))
-
-            next_input = tf.nn.max_pool(sigmoidd, ksize=[1, height, 2, 1], strides=[1, height, width, 1],
-                                        padding="SAME")
-
-            i += 1
-        next_input = tf.squeeze(next_input)
         return next_input
 
     def build_dilations(self, height, next_input, size, width,mask):
         inputs = [next_input]
 
         i =0
-        dilation_rate = 2 ** i
-        while dilation_rate <= FLAGS.max_len: #9 dilation si receptive field of 2^10 = 1024
+        rates = [1,1,2,2,1,4,1,2,8,1,2,1,4,2,1,2,4,1]
+        for dilation_rate in rates:
 
             with tf.variable_scope("dilated_{}".format(i)):
                 if dilation_rate <=2:
@@ -104,6 +116,7 @@ class BytenetQuora():
 
                 filter_ = tf.get_variable(name="conv_filter_{}".format(i), shape=[height, width, size, size])
                 res = atrous_conv2d(next_input, filters=filter_, rate=dilation_rate, padding="SAME")
+
                 res =tf.multiply(mask, res)
                 inputs.append(res)
                 layer_weights = tf.nn.softmax([tf.get_variable("layer_weight_{}".format(i),shape=[],dtype=tf.float32) for i in range(len(inputs))])
@@ -113,5 +126,4 @@ class BytenetQuora():
                 tf.nn.dropout(next_input,FLAGS.dropout_keep_prob)
                 tf.summary.histogram(name="activation", values=next_input)
                 i+=1
-                dilation_rate = 2 ** i
         return next_input

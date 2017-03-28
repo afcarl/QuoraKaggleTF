@@ -14,7 +14,9 @@ def prepareInputs(mode="train"):
     label, max_len_tens, length_1, length_2 = csv_data[:4]
     remaining = csv_data[4:]
     q1 = tf.stack(remaining[:max_len])
+    q1 =tf.slice(q1,[0,],size=[length_1])
     q2 = tf.stack(remaining[max_len:])
+    q2 = tf.slice(q2,[0,], size=[length_2])
     return label, q1,q2, length_1,length_2
 
 def prepareInputsBatch(batch_size=100,mode="train"):
