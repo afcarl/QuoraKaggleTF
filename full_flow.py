@@ -101,8 +101,8 @@ def main(__):
         sess.run(init,)
         DP =DataProvider(mode=FLAGS.mode)
         for epoch in range(FLAGS.num_epochs):
-            # for batch_num,batch in enumerate(DP.train_batch(FLAGS.batch_size)):
-            #     do_train_step(batch, batch_num, model, sess, train_writer)
+            for batch_num,batch in enumerate(DP.train_batch(FLAGS.batch_size)):
+                do_train_step(batch, batch_num, model, sess, train_writer)
             do_val_dlow(DP, epoch, model, sess, val_writer)
             print("Starting test")
             do_test_flow(DP, epoch, model, sess, test_writer)
