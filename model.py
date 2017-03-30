@@ -16,7 +16,7 @@ class BasicQuoraModel():
         self.loss_op = BasicQuoraModel.loss(self.logits_op,self.label)
         self.train_op = BasicQuoraModel.optimizer(self.loss_op,self.gs)
         BasicQuoraModel.make_gradient_summaries(self.loss_op)
-
+        self.probs = tf.unstack(tf.nn.softmax(self.logits_op),0)[1]
         self.metrics_op =BasicQuoraModel.metrics(logits=self.logits_op,labels=label)
         self.summaries = tf.summary.merge_all()
     @staticmethod
@@ -32,8 +32,11 @@ class BasicQuoraModel():
             precision_thresh,update_op_prec_thresh = tf.metrics.precision_at_thresholds(labels,predictions=true_probs,thresholds=thresholds)
             for tensor,thresh in zip(tf.unstack(precision_thresh),thresholds):
                 tf.summary.scalar(name="precision @ {}%".format(thresh*100), tensor=tensor)
+        with tf.name_scope("accuracy"):
+            accuracy,update_op_acc_thresh = tf.metrics.accuracy(labels,predictions=true_probs)
+            tf.summary.scalar(name="accuracy @ {}%".format(thresh*100), tensor=accuracy)
 
-            metrics_ops = tf.group(update_op_rec_thresh,update_op_prec_thresh)
+            metrics_ops = tf.group(update_op_rec_thresh,update_op_prec_thresh,update_op_acc_thresh)
             return metrics_ops
 
 

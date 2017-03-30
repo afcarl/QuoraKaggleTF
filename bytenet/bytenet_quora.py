@@ -17,15 +17,18 @@ class BytenetQuora():
         concat_lens = tf.stack([self.l1, self.l2], 1)
         greater_len = tf.reduce_max(concat_lens, 1)
         max_len = tf.reduce_max(greater_len)
-        s1 = tf.slice(self.s1,[0,0],[FLAGS.batch_size,max_len])
-        s2 = tf.slice(self.s2, [0,0],[FLAGS.batch_size,max_len])
+        batch_size = tf.unstack(tf.shape(self.s1))[0]
+        s1 = tf.slice(self.s1,[0,0],[batch_size,max_len])
+        s2 = tf.slice(self.s2, [0,0],[batch_size,max_len])
         mask,mask1,mask2 = self.build_mask_per_batch(self.l1,self.l2)
         self.logits_op= self.quick_encode(s1, s2,mask,mask1,mask2)
         self.loss_op = BasicQuoraModel.loss(self.logits_op,self.labels)
         self.train_op = BasicQuoraModel.optimizer(self.loss_op,gs)
+        self.probs = tf.unstack(tf.nn.softmax(self.logits_op), axis=1)[1]
         BasicQuoraModel.make_gradient_summaries(self.loss_op)
         self.metrics_op =BasicQuoraModel.metrics(logits=self.logits_op,labels=self.labels)
         self.summaries = tf.summary.merge_all()
+        self.gs = gs
 
     @staticmethod
     def build_mask_per_batch(l1,l2):
