@@ -116,7 +116,7 @@ class BytenetQuora():
                     height =2
                 else:
                     height =1
-
+                width = 3 + 2 % i
                 filter_ = tf.get_variable(name="conv_filter_{}".format(i), shape=[height, width, size, size])
                 res = atrous_conv2d(next_input, filters=filter_, rate=dilation_rate, padding="SAME")
 
