@@ -112,9 +112,10 @@ def main(__):
         for epoch in range(FLAGS.num_epochs):
             for batch_num,batch in enumerate(DP.train_batch(FLAGS.batch_size)):
                 do_train_step(batch, batch_num, model, sess, train_writer)
+
             do_val_dlow(DP, epoch, model, sess, val_writer)
             print("Starting test")
-            do_test_flow(DP, epoch, model, sess, test_writer)
+            #do_test_flow(DP, epoch, model, sess, test_writer)
 
 
 def do_test_flow(DP, epoch, model, sess, test_writer):
@@ -136,15 +137,11 @@ def do_val_dlow(DP, epoch, model, sess, val_writer):
 
 
 def do_train_step(batch, batch_num, model, sess, train_writer):
-    try:
         ids,feed = make_feed(batch, model)
         loss_val,gs, summary = do_train_fetches(feed, model, sess)
         print("train {gs} {loss}".format(gs=gs,loss=loss_val))
         if batch_num % 10 == 0:
             train_writer.add_summary(summary, gs)
-    except:
-        with open('./errors/{}.pkl'.format(batch_num),'wb') as f:
-            pickle.dump(batch,f)
 
 
 def do_val_step(batch, model, sess, val_writer,batch_num):
@@ -173,9 +170,9 @@ def do_train_fetches(feed, model, sess):
     _opt, _metrics, loss_val, summary, gs = sess.run(
         [
             model.train_op,
-            model.metrics_op,
+            model.metrics_update_op,
             model.loss_op,
-            model.summaries,
+            model.train_summaries,
             model.gs
         ],
         feed_dict=feed)
@@ -184,9 +181,9 @@ def do_train_fetches(feed, model, sess):
 def do_val_fetches(feed, model, sess):
     _metrics, loss_val, summary, gs ,probs= sess.run(
         [
-            model.metrics_op,
+            model.metrics_update_op,
             model.loss_op,
-            model.summaries,
+            model.val_summaries,
             model.gs,
             model.probs
         ],
