@@ -14,12 +14,20 @@ class DataProvider():
         print("Loading data")
         fname = "data.hdf" if mode=="normal" else "test_data.hdf"
         path = os.path.join(FLAGS.data_dir,fname)
-        self.train = pd.read_hdf(path,key="train")
-        self.val = pd.read_hdf(path, key="val")
-        self.test = pd.read_hdf(path, key="test")
+        self.train = self.clean_hack(pd.read_hdf(path,key="train"))
+        self.val = self.clean_hack(pd.read_hdf(path,key="val"))
+        self.test = self.clean_hack(pd.read_hdf(path,key="test"))
         self.mode = mode
-        print("done loading data")
 
+        print("done loading data")
+    def clean_hack(self,data):
+        '''
+        Remove questions with None in them as a quick fix
+        :param data:
+        :return:
+        '''
+        has_bad = data.apply(lambda x:None in x.question_x or None in x.question_y)
+        return data[has_bad == False]
     def do_batch(self,data,batch_size):
         size = batch_size
         start = 0
