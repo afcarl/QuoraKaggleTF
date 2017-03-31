@@ -26,7 +26,7 @@ class DataProvider():
         :param data:
         :return:
         '''
-        has_bad = data.apply(lambda x:None in x.question_x or None in x.question_y)
+        has_bad = data.apply(lambda x:None in x.question_x or None in x.question_y,1)
         return data[has_bad == False]
     def do_batch(self,data,batch_size):
         size = batch_size
@@ -150,6 +150,7 @@ def do_train_step(batch, batch_num, model, sess, train_writer):
 
 def do_val_step(batch, model, sess, val_writer,batch_num):
     ids, feed = make_feed(batch, model)
+    feed[model.dropout_pl] =1
     loss_val,gs, summary,probs = do_val_fetches(feed, model, sess)
     print("Val {gs} {loss}".format(gs=gs+batch_num, loss=loss_val))
     val_writer.add_summary(summary, gs+batch_num)
@@ -157,6 +158,7 @@ def do_val_step(batch, model, sess, val_writer,batch_num):
     return results
 def do_test_step(batch, model, sess, test_writer,epoch,batch_num):
     ids, feed = make_feed(batch, model)
+    feed[model.dropout_pl] = 1
     loss_val,gs, summary,probs = do_val_fetches(feed, model, sess)
     print("Test {gs} {loss}".format(gs=gs+batch_num, loss=loss_val))
     test_writer.add_summary(summary, gs+batch_num)
@@ -199,7 +201,8 @@ def make_feed(batch, model):
         model.s2: s2,
         model.l1: l1,
         model.l2: l2,
-        model.labels: label
+        model.labels: label,
+        model.dropout_pl:FLAGS.dropout_keep_prob
     }
     return ids,feed
 

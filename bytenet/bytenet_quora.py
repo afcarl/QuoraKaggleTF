@@ -14,6 +14,7 @@ class BytenetQuora():
         self.l1 = tf.placeholder(shape=[None], dtype=tf.int32,name="l1_pl")
         self.l2 = tf.placeholder(shape=[None], dtype=tf.int32,name="l2_pl")
         self.labels = tf.placeholder(shape=[None], dtype=tf.int32,name="labels_pl")
+        self.dropout_pl = tf.placeholder(shape=[],name="dropout_pl",dtype=tf.float32)
         concat_lens = tf.stack([self.l1, self.l2], 1)
         greater_len = tf.reduce_max(concat_lens, 1)
         max_len = tf.reduce_max(greater_len)
@@ -126,7 +127,7 @@ class BytenetQuora():
                 tf.summary.histogram("layer_weight_{i}",layer_weights)
                 layer_weights = tf.unstack(layer_weights)
                 next_input = ln(tf.nn.relu(sum([w*x  for w,x in zip(layer_weights,inputs)])))
-                tf.nn.dropout(next_input,FLAGS.dropout_keep_prob)
+                tf.nn.dropout(next_input,self.dropout_pl)
                 tf.summary.histogram(name="activation", values=next_input)
                 i+=1
         return next_input
