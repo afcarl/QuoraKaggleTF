@@ -14,30 +14,32 @@ class BasicQuoraModel():
         self.gs = gs
         self.logits_op = BasicQuoraModel.inference(self.s1,self.s2,self.l1,self.l2)
         self.loss_op = BasicQuoraModel.loss(self.logits_op,self.label)
+
         self.train_op = BasicQuoraModel.optimizer(self.loss_op,self.gs)
         BasicQuoraModel.make_gradient_summaries(self.loss_op)
         self.probs = tf.unstack(tf.nn.softmax(self.logits_op),0)[1]
-        self.metrics_op =BasicQuoraModel.metrics(logits=self.logits_op,labels=label)
-        self.summaries = tf.summary.merge_all()
+
     @staticmethod
     def metrics(logits,labels):
         with tf.name_scope("metrics"):
             probs = tf.nn.softmax(logits)
             false_probs,true_probs = tf.unstack(probs,axis=1)
             thresholds = [0.51, 0.6, 0.8, 0.95]
+            preds = tf.arg_max(probs,dimension=1)
+            metrics = []
             recall_thresh,update_op_rec_thresh = tf.metrics.recall_at_thresholds(labels,predictions=true_probs,thresholds=thresholds)
             for tensor,thresh in zip(tf.unstack(recall_thresh),thresholds):
-                tf.summary.scalar(name="recall @ {}%".format(thresh*100), tensor=tensor)
+                metrics.append(tf.summary.scalar(name="recall @ {}%".format(thresh*100), tensor=tensor))
 
             precision_thresh,update_op_prec_thresh = tf.metrics.precision_at_thresholds(labels,predictions=true_probs,thresholds=thresholds)
             for tensor,thresh in zip(tf.unstack(precision_thresh),thresholds):
-                tf.summary.scalar(name="precision @ {}%".format(thresh*100), tensor=tensor)
+                metrics.append(tf.summary.scalar(name="precision @ {}%".format(thresh*100), tensor=tensor))
         with tf.name_scope("accuracy"):
-            accuracy,update_op_acc_thresh = tf.metrics.accuracy(labels,predictions=true_probs)
-            tf.summary.scalar(name="accuracy @ {}%".format(thresh*100), tensor=accuracy)
+            accuracy,update_op_acc_thresh = tf.metrics.accuracy(labels,predictions=preds)
+            metrics.append(tf.summary.scalar(name="accuracy @ {}%".format(thresh*100), tensor=accuracy))
 
-            metrics_ops = tf.group(update_op_rec_thresh,update_op_prec_thresh,update_op_acc_thresh)
-            return metrics_ops
+        metrics_update_ops = tf.group(update_op_rec_thresh,update_op_prec_thresh,update_op_acc_thresh)
+        return metrics,metrics_update_ops
 
 
     @staticmethod
@@ -71,9 +73,11 @@ class BasicQuoraModel():
         with tf.name_scope("gradients"):
             grads = tf.gradients(loss, tf.trainable_variables())
             grads = list(zip(grads, tf.trainable_variables()))
+            grad_summaries= []
             for grad, var in grads:
                 if not "LayerNorm" in var.name and not "layer_weight" in var.name:
-                    tf.summary.histogram(var.name + '/gradient', grad)
+                    grad_summaries.append(tf.summary.histogram(var.name + '/gradient', grad))
+            return grad_summaries
 
     @staticmethod
     def prepare_sentance(sent,lengths,cell,):
@@ -151,7 +155,7 @@ class BasicQuoraModel():
     @staticmethod
     def loss(logits,targets):
         loss = tf.losses.sparse_softmax_cross_entropy(targets,logits)
-        tf.summary.scalar("loss",loss)
+
         return loss
 
     @staticmethod
