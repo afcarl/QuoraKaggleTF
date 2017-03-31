@@ -7,6 +7,7 @@ import os
 import pandas as pd
 import time
 from datetime import datetime
+import pickle
 class DataProvider():
     padding = [0 for i in range(1500)]
     def __init__(self,mode="normal"):
@@ -127,11 +128,15 @@ def do_val_dlow(DP, epoch, model, sess, val_writer):
 
 
 def do_train_step(batch, batch_num, model, sess, train_writer):
-    ids,feed = make_feed(batch, model)
-    loss_val,gs, summary = do_train_fetches(feed, model, sess)
-    print("train {gs} {loss}".format(gs=gs,loss=loss_val))
-    if batch_num % 10 == 0:
-        train_writer.add_summary(summary, gs)
+    try:
+        ids,feed = make_feed(batch, model)
+        loss_val,gs, summary = do_train_fetches(feed, model, sess)
+        print("train {gs} {loss}".format(gs=gs,loss=loss_val))
+        if batch_num % 10 == 0:
+            train_writer.add_summary(summary, gs)
+    except:
+        with open('./errors/{}.pkl'.format(batch_num),'wb') as f:
+            pickle.dump(batch,f)
 
 
 def do_val_step(batch, model, sess, val_writer,batch_num):
