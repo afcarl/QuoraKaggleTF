@@ -134,9 +134,10 @@ def do_train_step(batch, batch_num, model, sess, train_writer):
         print("train {gs} {loss}".format(gs=gs,loss=loss_val))
         if batch_num % 10 == 0:
             train_writer.add_summary(summary, gs)
-    except:
+    except Exception as e:
         with open('./errors/{}.pkl'.format(batch_num),'wb') as f:
             pickle.dump(batch,f)
+        raise e
 
 
 def do_val_step(batch, model, sess, val_writer,batch_num):
