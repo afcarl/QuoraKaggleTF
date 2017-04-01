@@ -35,7 +35,7 @@ class DataProvider():
         i =0
         while end < len(data):
             batch = data[start:end]
-            max_len = data.max_len.max()
+            max_len = batch.max_len.max()
             ids = batch.index.values
             q1 = np.stack(batch.question_x.apply(lambda x: DataProvider.pad_list(x, max_len)).values)
             q2 = np.stack(batch.question_y.apply(lambda x: DataProvider.pad_list(x, max_len)).values)
@@ -48,7 +48,13 @@ class DataProvider():
             end+=size
             yield batch_step
     def train_batch(self,batch_size):
-        return self.do_batch(self.train,batch_size)
+        dups = self.train[self.train.label==1]
+        no_dups =self.train[self.train.label==1]
+        amnt = len(dups)
+        data = dups.append(no_dups.sample(n=amnt))
+
+
+        return self.do_batch(data.sample(frac=1),batch_size)
     def val_batch(self,batch_size):
         return self.do_batch(self.val,batch_size)
     def test_batch(self, batch_size):
@@ -112,8 +118,8 @@ def main(__):
         for epoch in range(FLAGS.num_epochs):
             for batch_num,batch in enumerate(DP.train_batch(FLAGS.batch_size)):
                 do_train_step(batch, batch_num, model, sess, train_writer)
-
-            do_val_dlow(DP, epoch, model, sess, val_writer)
+            if FLAGS.mode != "test" or epoch >20:
+                do_val_dlow(DP, epoch, model, sess, val_writer)
             print("Starting test")
             #do_test_flow(DP, epoch, model, sess, test_writer)
 

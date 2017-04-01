@@ -1,5 +1,6 @@
 import tensorflow as tf
 from tensorflow.contrib.layers.python.layers.initializers import xavier_initializer
+from tensorflow.contrib.layers.python.layers.regularizers import l2_regularizer
 from tensorflow.python.ops.losses.util import get_regularization_losses
 from tensorflow.python.ops.nn_ops import atrous_conv2d
 import numpy as np
@@ -26,15 +27,18 @@ class BytenetQuora():
         self.logits_op= self.quick_encode(s1, s2,mask,mask1,mask2)
         self.loss_op = BasicQuoraModel.loss(self.logits_op,self.labels)
         reg_loss =sum(get_regularization_losses())
-        self.train_op = BasicQuoraModel.optimizer(self.loss_op+reg_loss,gs)
-        self.probs = tf.unstack(tf.nn.softmax(self.logits_op), axis=1)[1]
-        gradient_summaries = BasicQuoraModel.make_gradient_summaries(self.loss_op)
+        #reg_loss =0
         metrics,self.metrics_update_op =BasicQuoraModel.metrics(logits=self.logits_op,labels=self.labels)
         metrics.append(tf.summary.scalar("loss", self.loss_op))
         metrics.append(tf.summary.scalar("reg_loss", reg_loss))
         metrics.append(tf.summary.scalar("total_loss", self.loss_op+reg_loss))
+
+        self.train_op = BasicQuoraModel.optimizer(self.loss_op+reg_loss,gs)
+        self.probs = tf.unstack(tf.nn.softmax(self.logits_op), axis=1)[1]
+        gradient_summaries = BasicQuoraModel.make_gradient_summaries(self.loss_op)
+
         self.val_summaries = tf.summary.merge(metrics)
-        self.train_summaries = tf.summary.merge(metrics+gradient_summaries)
+        self.train_summaries = tf.summary.merge_all()
 
         self.gs = gs
 
@@ -58,6 +62,7 @@ class BytenetQuora():
         big_mask = tf.sequence_mask(greater_len, dtype=tf.float32,)
         mask = tf.expand_dims(tf.stack([big_mask, big_mask], axis=1), axis=3)
         return mask,mask1,mask2
+
     def quick_encode(self,s1,s2,mask,mask1,mask2):
         with tf.variable_scope("model", initializer=xavier_initializer(),regularizer=tf.contrib.layers.l2_regularizer(0.2)):
             combined, s1_emb = self.emebdd_and_stack_inputs(s1, s2,mask1,mask2)
@@ -97,7 +102,10 @@ class BytenetQuora():
         batch_size,_,sequence_length,hidden_size = tf.unstack(tf.shape(next_input))
         next_input = tf.reshape(next_input,shape=[batch_size,FLAGS.hidden2,-1])
         means = tf.reduce_max(next_input,axis=2) #mean is [batch_size,2,size]
-        next_input = ln(tf.nn.relu(means))
+        with tf.name_scope("reduction"):
+            tf.summary.histogram("reductions",means)
+            next_input = ln(tf.nn.relu(means))
+            tf.summary.histogram("reductions_active", next_input)
         # i =0
         # next_input = tf.expand_dims(means,axis=1)
         # next_input = tf.expand_dims(next_input, axis=1)
@@ -131,10 +139,11 @@ class BytenetQuora():
                 width = 3 + (i%2)
                 filter_ = tf.get_variable(name="conv_filter_{}".format(i), shape=[height, width, size, size],)
                 res = atrous_conv2d(next_input, filters=filter_, rate=dilation_rate, padding="SAME")
-                res =tf.multiply(mask, res)
+                if i <-1:
+                    res =tf.multiply(mask, res)
                 inputs.append(res)
                 next_input = ln(tf.nn.relu(sum(inputs)))
-                tf.nn.dropout(next_input,self.dropout_pl)
                 tf.summary.histogram(name="activation", values=next_input)
+                next_input =tf.nn.dropout(next_input,self.dropout_pl)
                 i+=1
         return next_input
