@@ -64,7 +64,7 @@ class BytenetQuora():
         return mask,mask1,mask2
 
     def quick_encode(self,s1,s2,mask,mask1,mask2):
-        with tf.variable_scope("model", initializer=xavier_initializer(),regularizer=tf.contrib.layers.l2_regularizer(0.2)):
+        with tf.variable_scope("model", initializer=xavier_initializer()):#,regularizer=tf.contrib.layers.l2_regularizer(0.2)):
             combined, s1_emb = self.emebdd_and_stack_inputs(s1, s2,mask1,mask2)
             combined = tf.multiply(mask, combined) # Zero out what should be zero
             height =2
