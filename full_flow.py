@@ -49,7 +49,7 @@ class DataProvider():
             yield batch_step
     def train_batch(self,batch_size):
         dups = self.train[self.train.label==1]
-        no_dups =self.train[self.train.label==1]
+        no_dups =self.train[self.train.label==0]
         amnt = len(dups)
         data = dups.append(no_dups.sample(n=amnt))
 
