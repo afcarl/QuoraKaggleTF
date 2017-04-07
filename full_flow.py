@@ -7,7 +7,6 @@ import os
 import pandas as pd
 import time
 from datetime import datetime
-import editdistance
 import pickle
 class DataProvider():
     padding = [0 for i in range(FLAGS.max_len)]
