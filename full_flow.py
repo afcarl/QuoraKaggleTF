@@ -2,22 +2,24 @@ import tensorflow as tf
 from arg_getter import FLAGS
 from tensorflow.python.training.monitored_session import MonitoredTrainingSession
 import numpy as np
-from bytenet.bytenet_quora import BytenetQuora
+from bytenet.lda_net import LDANet
 import os
 import pandas as pd
 import time
 from datetime import datetime
+import editdistance
 import pickle
 class DataProvider():
-    padding = [0 for i in range(1500)]
+    padding = [0 for i in range(FLAGS.max_len)]
     def __init__(self,mode="normal"):
         print("Loading data")
         fname = "data.hdf" if mode=="normal" else "test_data.hdf"
         path = os.path.join(FLAGS.data_dir,fname)
-        self.train = self.clean_hack(pd.read_hdf(path,key="train"))
-        self.val = self.clean_hack(pd.read_hdf(path,key="val"))
-        self.test = self.clean_hack(pd.read_hdf(path,key="test"))
+        self.train = self.clean_hack(pd.read_hdf(path,key="train_lda"))
+        self.val = self.clean_hack(pd.read_hdf(path,key="val_lda"))
+        self.test = self.train#self.clean_hack(pd.read_hdf(path,key="test"))
         self.mode = mode
+
 
         print("done loading data")
     def clean_hack(self,data):
@@ -34,15 +36,16 @@ class DataProvider():
         end = size
         i =0
         while end < len(data):
-            batch = data[start:end]
-            max_len = batch.max_len.max()
+            batch = data[start:end].dropna()
             ids = batch.index.values
-            q1 = np.stack(batch.question_x.apply(lambda x: DataProvider.pad_list(x, max_len)).values)
-            q2 = np.stack(batch.question_y.apply(lambda x: DataProvider.pad_list(x, max_len)).values)
+            q1 = np.stack(batch.question_x.apply(lambda x: DataProvider.pad_list(x, )).values)
+            q2 = np.stack(batch.question_y.apply(lambda x: DataProvider.pad_list(x, )).values)
             l1 = batch.length_x.values
             l2 = batch.length_y.values
             labels = batch.label.values
-            batch_step = (ids,q1,q2,l1,l2,labels)
+            lda1 = np.stack(batch.lda_x.values)
+            lda2 = np.stack(batch.lda_y.values)
+            batch_step = (ids,q1,q2,l1,l2,lda1,lda2,labels)
             i+=1
             start+=size
             end+=size
@@ -61,8 +64,8 @@ class DataProvider():
         return self.do_batch(self.test, batch_size)
 
     @staticmethod
-    def pad_list(l,max_len):
-        return np.array((l+DataProvider.padding)[:max_len])
+    def pad_list(l,):
+        return np.array((l+DataProvider.padding)[:FLAGS.max_len])
 
 
 
@@ -73,7 +76,7 @@ def main(__):
     val_dir = os.path.join(FLAGS.save_dir, "val","results")
     test_dir = os.path.join(FLAGS.save_dir, "test","results")
     gs = tf.contrib.framework.get_or_create_global_step()
-    model = BytenetQuora(gs)
+    model = LDANet(gs)
     init = tf.global_variables_initializer()
     total_parameters = 0
     print_paramater_count(total_parameters)
@@ -119,7 +122,8 @@ def main(__):
             for batch_num,batch in enumerate(DP.train_batch(FLAGS.batch_size)):
                 do_train_step(batch, batch_num, model, sess, train_writer)
             if FLAGS.mode != "test" or epoch %20 ==0:
-                do_val_dlow(DP, epoch, model, sess, val_writer)
+                pass
+                #do_val_dlow(DP, epoch, model, sess, val_writer)
             print("Starting test")
             #do_test_flow(DP, epoch, model, sess, test_writer)
 
@@ -197,14 +201,17 @@ def do_val_fetches(feed, model, sess):
     return loss_val,gs, summary,probs
 
 def make_feed(batch, model):
-    ids,s1, s2, l1, l2, label = batch
+    ids,s1, s2, l1, l2,lda1,lda2, label = batch
     feed = {
         model.s1: s1,
         model.s2: s2,
         model.l1: l1,
         model.l2: l2,
+        model.lda1: lda1,
+        model.lda2: lda2,
         model.labels: label,
-        model.dropout_pl:FLAGS.dropout_keep_prob
+        model.dropout_pl:FLAGS.dropout_keep_prob,
+        model.use_lda_loss:1
     }
     return ids,feed
 

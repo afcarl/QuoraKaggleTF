@@ -1,6 +1,8 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow.contrib.layers.python.layers.initializers import xavier_initializer
+from tensorflow.contrib.metrics.python.ops.metric_ops import streaming_accuracy
+
 from arg_getter import FLAGS
 
 
@@ -20,10 +22,9 @@ class BasicQuoraModel():
         self.probs = tf.unstack(tf.nn.softmax(self.logits_op),0)[1]
 
     @staticmethod
-    def metrics(logits,labels):
+    def metrics(probs,labels):
         with tf.name_scope("metrics"):
-            probs = tf.nn.softmax(logits)
-            false_probs,true_probs = tf.unstack(probs,axis=1)
+            true_probs = probs
             thresholds = [0.51, 0.6, 0.8, 0.95]
             preds = tf.arg_max(probs,dimension=1)
             metrics = []
@@ -34,10 +35,10 @@ class BasicQuoraModel():
             precision_thresh,update_op_prec_thresh = tf.metrics.precision_at_thresholds(labels,predictions=true_probs,thresholds=thresholds)
             for tensor,thresh in zip(tf.unstack(precision_thresh),thresholds):
                 metrics.append(tf.summary.scalar(name="precision @ {}%".format(thresh*100), tensor=tensor))
-        with tf.name_scope("accuracy"):
-            accuracy,update_op_acc_thresh = tf.metrics.accuracy(labels,predictions=preds)
-            metrics.append(tf.summary.scalar(name="accuracy @ {}%".format(thresh*100), tensor=accuracy))
-
+        # with tf.name_scope("accuracy"):
+        #     accuracy,update_op_acc_thresh = tf.metrics.accuracy(labels,predictions=preds)
+        #     metrics.append(tf.summary.scalar(name="accuracy @ {}%".format(thresh*100), tensor=accuracy))
+        update_op_acc_thresh=tf.no_op()
         metrics_update_ops = tf.group(update_op_rec_thresh,update_op_prec_thresh,update_op_acc_thresh)
         return metrics,metrics_update_ops
 
