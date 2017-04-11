@@ -2,14 +2,14 @@ import tensorflow as tf
 from arg_getter import FLAGS
 from tensorflow.python.training.monitored_session import MonitoredTrainingSession
 import numpy as np
-from bytenet.bytenet_quora import BytenetQuora
+from densenet.model import  DenseNetQuora
 import os
 import pandas as pd
 import time
 from datetime import datetime
 import pickle
 class DataProvider():
-    padding = [0 for i in range(1500)]
+    padding = [0 for i in range(FLAGS.max_len)]
     def __init__(self,mode="normal"):
         print("Loading data")
         fname = "data.hdf" if mode=="normal" else "test_data.hdf"
@@ -34,11 +34,10 @@ class DataProvider():
         end = size
         i =0
         while end < len(data):
-            batch = data[start:end]
-            max_len = batch.max_len.max()
+            batch = data[start:end].dropna()
             ids = batch.index.values
-            q1 = np.stack(batch.question_x.apply(lambda x: DataProvider.pad_list(x, max_len)).values)
-            q2 = np.stack(batch.question_y.apply(lambda x: DataProvider.pad_list(x, max_len)).values)
+            q1 = np.stack(batch.question_x.apply(lambda x: DataProvider.pad_list(x, )).values)
+            q2 = np.stack(batch.question_y.apply(lambda x: DataProvider.pad_list(x, )).values)
             l1 = batch.length_x.values
             l2 = batch.length_y.values
             labels = batch.label.values
@@ -61,8 +60,8 @@ class DataProvider():
         return self.do_batch(self.test, batch_size)
 
     @staticmethod
-    def pad_list(l,max_len):
-        return np.array((l+DataProvider.padding)[:max_len])
+    def pad_list(l,):
+        return np.array((l+DataProvider.padding)[:FLAGS.max_len])
 
 
 
@@ -73,7 +72,7 @@ def main(__):
     val_dir = os.path.join(FLAGS.save_dir, "val","results")
     test_dir = os.path.join(FLAGS.save_dir, "test","results")
     gs = tf.contrib.framework.get_or_create_global_step()
-    model = BytenetQuora(gs)
+    model = DenseNetQuora(gs)
     init = tf.global_variables_initializer()
     total_parameters = 0
     print_paramater_count(total_parameters)
